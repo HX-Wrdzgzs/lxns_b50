@@ -1,0 +1,252 @@
+import httpx
+from typing import List, Optional, Any
+from loguru import logger as log
+from ..config import maiconfig
+
+# 内存路由字典，用于动态切置默认查分端
+user_source_route = {}
+
+# ==========================================
+# 落雪 / 水鱼 API 共享常量
+# ==========================================
+LXNS_BASE = "https://maimai.lxns.net/api/v0"
+FISH_BASE = "https://www.diving-fish.com/api/maimaidxprober"
+
+
+class MaiApi:
+    def __init__(self):
+        self.headers = {}
+        self.token: Optional[str] = maiconfig.maimaidxtoken or None
+
+    def load_token_proxy(self):
+        """生命周期钩子：加载落雪开发者凭证"""
+        if maiconfig.lxnstoken:
+            self.headers = {"Authorization": maiconfig.lxnstoken}
+            log.info("落雪开放平台 API 凭证加载成功。")
+
+    # ==========================================
+    # 落雪 API 方法
+    # ==========================================
+
+    async def check_bind_status(self, qqid: int) -> dict:
+        """同步检测指定 QQ 账户在落雪和水鱼平台的绑定注册状态"""
+        status = {"lxns": False, "diving_fish": False}
+        async with httpx.AsyncClient(timeout=10) as client:
+            if maiconfig.lxnstoken:
+                try:
+                    res = await client.get(f"{LXNS_BASE}/maimai/player/qq/{qqid}", headers=self.headers)
+                    if res.status_code == 200:
+                        status["lxns"] = True
+                except Exception as e:
+                    log.error(f"中继探测落雪绑定状态发生网络断流: {e}")
+            try:
+                res = await client.post(f"{FISH_BASE}/query/player", json={"qq": str(qqid)})
+                if res.status_code == 200:
+                    status["diving_fish"] = True
+            except Exception as e:
+                log.error(f"中继探测水鱼绑定状态发生网络断流: {e}")
+        return status
+
+    async def get_lxns_rating_curves(self, qqid: int) -> list:
+        """获取落雪平台玩家的历史 Rating 变动轨迹数据"""
+        if not maiconfig.lxnstoken:
+            return []
+        async with httpx.AsyncClient(timeout=10) as client:
+            try:
+                res = await client.get(f"{LXNS_BASE}/maimai/player/qq/{qqid}/history", headers=self.headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    return data if isinstance(data, list) else data.get("history", [])
+            except Exception as e:
+                log.error(f"拉取落雪 Rating 变动历史记录失败: {e}")
+        return []
+
+    async def query_user_b50(self, qqid: Optional[int] = None, username: Optional[str] = None, is_ap: bool = False) -> Any:
+        """
+        获取用户 Best 50 数据。
+        优先使用落雪 API（通过 QQ 查询），回退到水鱼 API（通过 username 或 QQ 查询）。
+        """
+        from .maimaidx_model import UserInfo, Data, ChartInfo
+
+        # 策略一：落雪 API（需要 lxnstoken）
+        if maiconfig.lxnstoken and qqid:
+            try:
+                endpoint = f"{LXNS_BASE}/maimai/player/qq/{qqid}/bests"
+                if is_ap:
+                    endpoint += "/ap"
+                async with httpx.AsyncClient(timeout=15) as client:
+                    res = await client.get(endpoint, headers=self.headers)
+                if res.status_code == 200:
+                    data = res.json().get("data", {})
+                    # 获取玩家基本信息用于 nickname / plate
+                    profile_res = await client.get(f"{LXNS_BASE}/maimai/player/qq/{qqid}", headers=self.headers)
+                    profile = profile_res.json().get("data", {}) if profile_res.status_code == 200 else {}
+                    sd_list = []
+                    dx_list = []
+                    for c in data.get("standard", []):
+                        sd_list.append(ChartInfo(
+                            song_id=c.get("id", 0), title=c.get("song_name", ""),
+                            level_index=c.get("level_index", 0), level=c.get("level", ""),
+                            achievements=c.get("achievements", 0), dxScore=c.get("dx_score", 0),
+                            rate=c.get("rate", ""), fc=c.get("fc") or "", fs=c.get("fs") or "",
+                            type=c.get("type", "standard"), level_label="",
+                            ds=0, ra=int(c.get("dx_rating", 0))
+                        ))
+                    for c in data.get("dx", []):
+                        dx_list.append(ChartInfo(
+                            song_id=c.get("id", 0), title=c.get("song_name", ""),
+                            level_index=c.get("level_index", 0), level=c.get("level", ""),
+                            achievements=c.get("achievements", 0), dxScore=c.get("dx_score", 0),
+                            rate=c.get("rate", ""), fc=c.get("fc") or "", fs=c.get("fs") or "",
+                            type=c.get("type", "dx"), level_label="",
+                            ds=0, ra=int(c.get("dx_rating", 0))
+                        ))
+                    return UserInfo(
+                        nickname=profile.get("name", username or str(qqid)),
+                        rating=data.get("total", 0),
+                        additional_rating=profile.get("course_rank", 0),
+                        plate=str(profile.get("name_plate", {}).get("id", "")) if profile.get("name_plate") else "",
+                        username=str(profile.get("icon", {}).get("id", "")) if profile.get("icon") else "",
+                        charts=Data(sd=sd_list[:35], dx=dx_list[:15])
+                    )
+            except Exception as e:
+                log.warning(f"落雪 B50 查询失败(qqid={qqid})，将回退水鱼: {e}")
+
+        # 策略二：水鱼 API
+        body = {}
+        if username:
+            body["username"] = username
+        elif qqid:
+            body["qq"] = str(qqid)
+        else:
+            raise ValueError("必须提供 username 或 qqid")
+        body["b50"] = "1"
+
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.post(f"{FISH_BASE}/query/player", json=body)
+        if res.status_code == 200:
+            raw = res.json()
+            sd_list = []
+            dx_list = []
+            for c in raw.get("charts", {}).get("sd", []):
+                sd_list.append(ChartInfo(**c))
+            for c in raw.get("charts", {}).get("dx", []):
+                dx_list.append(ChartInfo(**c))
+            return UserInfo(
+                nickname=raw.get("nickname", username or str(qqid)),
+                rating=raw.get("rating", 0),
+                additional_rating=raw.get("additional_rating", 0),
+                plate=raw.get("plate", ""),
+                username=raw.get("username", ""),
+                charts=Data(sd=sd_list, dx=dx_list)
+            )
+        elif res.status_code == 400:
+            from .maimaidx_error import UserNotFoundError
+            raise UserNotFoundError()
+        elif res.status_code == 403:
+            from .maimaidx_error import UserDisabledQueryError
+            raise UserDisabledQueryError()
+        else:
+            from .maimaidx_error import UnknownError
+            raise UnknownError()
+
+    async def query_user_plate(self, qqid: int, version: list, username: Optional[str] = None) -> list:
+        """
+        按版本获取用户的成绩信息（水鱼 query/plate）
+        """
+        body = {"qq": str(qqid), "version": version}
+        if username:
+            body = {"username": username, "version": version}
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.post(f"{FISH_BASE}/query/plate", json=body)
+        if res.status_code == 200:
+            raw_list = res.json()
+            from .maimaidx_model import PlayInfoDefault
+            result = []
+            for item in raw_list:
+                result.append(PlayInfoDefault(**item))
+            return result
+        elif res.status_code == 400:
+            from .maimaidx_error import UserNotFoundError
+            raise UserNotFoundError()
+        elif res.status_code == 403:
+            from .maimaidx_error import UserDisabledQueryError
+            raise UserDisabledQueryError()
+        return []
+
+    async def query_user_post_dev(self, qqid: int, music_id: str) -> Optional[list]:
+        """
+        使用水鱼 Developer-Token 查询用户单曲成绩（POST /dev/player/record）
+        """
+        if not self.token:
+            return None
+        headers = {"Developer-Token": self.token}
+        async with httpx.AsyncClient(timeout=15) as client:
+            res = await client.post(
+                f"{FISH_BASE}/dev/player/record",
+                headers=headers,
+                json={"qq": str(qqid), "music_id": int(music_id)}
+            )
+        if res.status_code == 200:
+            raw_list = res.json()
+            from .maimaidx_model import PlayInfoDev
+            return [PlayInfoDev(**item) for item in raw_list] if isinstance(raw_list, list) else []
+        return []
+
+    async def query_user_get_dev(self, qqid: Optional[int] = None, username: Optional[str] = None) -> Any:
+        """
+        使用水鱼 Developer-Token 获取用户完整成绩（GET /dev/player/records）
+        """
+        if not self.token:
+            from .maimaidx_error import TokenNotFoundError
+            raise TokenNotFoundError()
+        headers = {"Developer-Token": self.token}
+        params = {}
+        if qqid:
+            params["qq"] = str(qqid)
+        elif username:
+            params["username"] = username
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.get(f"{FISH_BASE}/dev/player/records", headers=headers, params=params)
+        if res.status_code == 200:
+            return res.json()
+        elif res.status_code == 400:
+            from .maimaidx_error import UserNotFoundError
+            raise UserNotFoundError()
+        return None
+
+    async def rating_ranking(self) -> list:
+        """获取水鱼公开 Rating 排名数据"""
+        async with httpx.AsyncClient(timeout=30) as client:
+            res = await client.get(f"{FISH_BASE}/rating_ranking")
+        if res.status_code == 200:
+            return res.json()
+        return []
+
+    async def get_songs(self, name: str) -> Optional[list]:
+        """
+        通过水鱼 API 查询曲目标签（别名搜索）
+        """
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                res = await client.get(f"{FISH_BASE}/side_api/alias")
+            if res.status_code == 200:
+                alias_dict = res.json()
+                matched = []
+                for song_id, aliases in alias_dict.items():
+                    if any(name.lower() == a.lower() for a in aliases):
+                        from .maimaidx_model import Alias
+                        matched.append(Alias(SongID=int(song_id), Name="", Alias=aliases))
+                return matched if matched else None
+        except Exception as e:
+            log.warning(f"获取别名数据失败: {e}")
+        return None
+
+    async def qqlogo(self, qqid: int) -> bytes:
+        """获取 QQ 头像"""
+        async with httpx.AsyncClient(timeout=10) as client:
+            res = await client.get(f"https://q1.qlogo.cn/g?b=qq&nk={qqid}&s=100")
+        return res.content
+
+
+maiApi = MaiApi()
