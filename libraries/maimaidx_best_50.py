@@ -70,27 +70,27 @@ class ScoreBaseImage:
         if cls._class_loaded:
             return
         cls._diff = [
-            Image.open(maimaidir / 'b50_score_basic.png'), 
-            Image.open(maimaidir / 'b50_score_advanced.png'), 
-            Image.open(maimaidir / 'b50_score_expert.png'), 
-            Image.open(maimaidir / 'b50_score_master.png'), 
-            Image.open(maimaidir / 'b50_score_remaster.png')
+            Image.open(maidir / 'b50_score_basic.png'), 
+            Image.open(maidir / 'b50_score_advanced.png'), 
+            Image.open(maidir / 'b50_score_expert.png'), 
+            Image.open(maidir / 'b50_score_master.png'), 
+            Image.open(maidir / 'b50_score_remaster.png')
         ]
         cls._rise = [
-            Image.open(maimaidir / 'rise_score_basic.png'),
-            Image.open(maimaidir / 'rise_score_advanced.png'),
-            Image.open(maimaidir / 'rise_score_expert.png'),
-            Image.open(maimaidir / 'rise_score_master.png'),
-            Image.open(maimaidir / 'rise_score_remaster.png')
+            Image.open(maidir / 'rise_score_basic.png'),
+            Image.open(maidir / 'rise_score_advanced.png'),
+            Image.open(maidir / 'rise_score_expert.png'),
+            Image.open(maidir / 'rise_score_master.png'),
+            Image.open(maidir / 'rise_score_remaster.png')
         ]
-        cls.title_bg = Image.open(maimaidir / 'title.png')
-        cls.title_lengthen_bg = Image.open(maimaidir / 'title-lengthen.png')
-        cls.design_bg = Image.open(maimaidir / 'design.png')
-        cls.aurora_bg = Image.open(maimaidir / 'aurora.png').convert('RGBA').resize((1400, 220))
-        cls.shines_bg = Image.open(maimaidir / 'bg_shines.png').convert('RGBA')
-        cls.pattern_bg = Image.open(maimaidir / 'pattern.png')
-        cls.rainbow_bg = Image.open(maimaidir / 'rainbow.png').convert('RGBA')
-        cls.rainbow_bottom_bg = Image.open(maimaidir / 'rainbow_bottom.png').convert('RGBA').resize((1200, 200))
+        cls.title_bg = Image.open(maidir / 'title.png')
+        cls.title_lengthen_bg = Image.open(maidir / 'title-lengthen.png')
+        cls.design_bg = Image.open(maidir / 'design.png')
+        cls.aurora_bg = Image.open(maidir / 'aurora.png').convert('RGBA').resize((1400, 220))
+        cls.shines_bg = Image.open(maidir / 'bg_shines.png').convert('RGBA')
+        cls.pattern_bg = Image.open(maidir / 'pattern.png')
+        cls.rainbow_bg = Image.open(maidir / 'rainbow.png').convert('RGBA')
+        cls.rainbow_bottom_bg = Image.open(maidir / 'rainbow_bottom.png').convert('RGBA').resize((1200, 200))
         cls._class_loaded = True
     
     def whiledraw(self, data: Union[List[ChartInfo], List[PlayInfoDefault], List[PlayInfoDev]], dx: bool, height: int = 0) -> None:
@@ -108,29 +108,33 @@ class ScoreBaseImage:
                 x += 276
 
             cover = Image.open(music_picture(info.song_id)).resize((75, 75))
-            version = Image.open(maimaidir / f'{info.type.upper()}.png').resize((37, 14))
+            version = Image.open(maidir / f'{info.type.upper()}.png').resize((37, 14))
             if info.rate.islower():
-                rate = Image.open(maimaidir / f'UI_TTR_Rank_{score_Rank_l[info.rate]}.png').resize((63, 28))
+                rate = Image.open(maidir / f'UI_TTR_Rank_{score_Rank_l[info.rate]}.png').resize((63, 28))
             else:
-                rate = Image.open(maimaidir / f'UI_TTR_Rank_{info.rate}.png').resize((63, 28))
+                rate = Image.open(maidir / f'UI_TTR_Rank_{info.rate}.png').resize((63, 28))
 
             self._im.alpha_composite(self._diff[info.level_index], (x, y))
             self._im.alpha_composite(cover, (x + 12, y + 12))
             self._im.alpha_composite(version, (x + 51, y + 91))
             self._im.alpha_composite(rate, (x + 92, y + 78))
             if info.fc:
-                fc = Image.open(maimaidir / f'UI_MSS_MBase_Icon_{fcl[info.fc]}.png').resize((34, 34))
+                fc = Image.open(maidir / f'UI_MSS_MBase_Icon_{fcl[info.fc]}.png').resize((34, 34))
                 self._im.alpha_composite(fc, (x + 154, y + 77))
             if info.fs:
-                fs = Image.open(maimaidir / f'UI_MSS_MBase_Icon_{fsl[info.fs]}.png').resize((34, 34))
+                fs = Image.open(maidir / f'UI_MSS_MBase_Icon_{fsl[info.fs]}.png').resize((34, 34))
                 self._im.alpha_composite(fs, (x + 185, y + 77))
             
             _music = mai.total_list.by_id(str(info.song_id))
             if _music and len(_music.charts) > info.level_index:
-                dxscore = sum(_music.charts[info.level_index].notes) * 3
+                # 【修改点】向下兼容原生字典的读取方式，绝育 AttributeError
+                chart_data = _music.charts[info.level_index]
+                notes = chart_data.get('notes', []) if isinstance(chart_data, dict) else getattr(chart_data, 'notes', [])
+                dxscore = sum(notes) * 3
+                
                 dxnum = dxScore(info.dxScore / dxscore * 100) if dxscore > 0 else 0
                 if dxnum:
-                    self._im.alpha_composite(Image.open(maimaidir / f'UI_GAM_Gauge_DXScoreIcon_0{dxnum}.png').resize((47, 26)), (x + 217, y + 80))
+                    self._im.alpha_composite(Image.open(maidir / f'UI_GAM_Gauge_DXScoreIcon_0{dxnum}.png').resize((47, 26)), (x + 217, y + 80))
                 self._tb.draw(x + 219, y + 65, 15, f'{info.dxScore}/{dxscore}', self.t_color[info.level_index], anchor='mm')
 
             self._tb.draw(x + 26, y + 98, 13, info.song_id, self.id_color[info.level_index], anchor='mm')
@@ -144,14 +148,13 @@ class ScoreBaseImage:
 class DrawBest(ScoreBaseImage):
 
     def __init__(self, UserInfo: UserInfo, qqid: Optional[Union[int, str]] = None, is_ap: bool = False) -> None:
-        super().__init__(Image.open(maimaidir / 'b50_bg.png').convert('RGBA'))
+        super().__init__(Image.open(maidir / 'b50_bg.png').convert('RGBA'))
         self.userName = UserInfo.nickname
         self.plate = UserInfo.plate
         self.lxns_icon = UserInfo.username
         self.addRating = UserInfo.additional_rating
         self.Rating = UserInfo.rating
         
-        # 【修改点2】：绕开模型保护，强行创建一个只含安全谱面（非宴谱）的全新纯净列表
         self.sdBest = [c for c in UserInfo.charts.sd if c.level_index <= 4]
         self.dxBest = [c for c in UserInfo.charts.dx if c.level_index <= 4]
         
@@ -179,16 +182,16 @@ class DrawBest(ScoreBaseImage):
         return f'UI_DNM_DaniPlate_{num}.png'
 
     async def draw(self) -> Image.Image:
-        logo = Image.open(maimaidir / 'logo.png').resize((249, 120))
-        dx_rating = Image.open(maimaidir / f'UI_CMN_DXRating_{self._findRaPic()}.png').resize((186, 35))
-        Name = Image.open(maimaidir / 'Name.png')
-        MatchLevel = Image.open(maimaidir / self._findMatchLevel()).resize((80, 32))
-        ClassLevel = Image.open(maimaidir / 'UI_FBR_Class_00.png').resize((90, 54))
-        rating = Image.open(maimaidir / 'UI_CMN_Shougou_Rainbow.png').resize((270, 27))
+        logo = Image.open(maidir / 'logo.png').resize((249, 120))
+        dx_rating = Image.open(maidir / f'UI_CMN_DXRating_{self._findRaPic()}.png').resize((186, 35))
+        Name = Image.open(maidir / 'Name.png')
+        MatchLevel = Image.open(maidir / self._findMatchLevel()).resize((80, 32))
+        ClassLevel = Image.open(maidir / 'UI_FBR_Class_00.png').resize((90, 54))
+        rating = Image.open(maidir / 'UI_CMN_Shougou_Rainbow.png').resize((270, 27))
 
         self._im.alpha_composite(logo, (14, 60))
         
-        plate = Image.open(maimaidir / 'UI_Plate_300501.png').resize((800, 130))
+        plate = Image.open(maidir / 'UI_Plate_300501.png').resize((800, 130))
         if self.plate and self.plate.isdigit():
             plate_cache_path = platedir / f"{self.plate}_lxns.png"
             if plate_cache_path.exists():
@@ -208,7 +211,7 @@ class DrawBest(ScoreBaseImage):
                     log.warning(f"下载落雪牌子({self.plate})失败: {e}")
         self._im.alpha_composite(plate, (300, 60))
         
-        icon = Image.open(maimaidir / 'UI_Icon_309503.png').resize((120, 120))
+        icon = Image.open(maidir / 'UI_Icon_309503.png').resize((120, 120))
         if getattr(self, 'lxns_icon', None) and self.lxns_icon.isdigit():
             icon_cache_path = static / 'mai' / 'icon' / f"{self.lxns_icon}_lxns.png"
             if icon_cache_path.exists():
@@ -238,7 +241,7 @@ class DrawBest(ScoreBaseImage):
         Rating = f'{self.Rating:05d}'
         for n, i in enumerate(Rating):
             self._im.alpha_composite(
-                Image.open(maimaidir / f'UI_NUM_Drating_{i}.png').resize((17, 20)), (520 + 15 * n, 80)
+                Image.open(maidir / f'UI_NUM_Drating_{i}.png').resize((17, 20)), (520 + 15 * n, 80)
             )
         self._im.alpha_composite(Name, (435, 115))
         self._im.alpha_composite(MatchLevel, (625, 120))
@@ -333,7 +336,7 @@ async def generate(qqid: Optional[int] = None, username: Optional[str] = None, i
 
         draw_best = DrawBest(userinfo, qqid, is_ap)
         msg = MessageSegment.image(image_to_base64(await draw_best.draw()))
-    except (UserNotFoundError, UserNotExistsError, UserDisabledQueryError) as e:
+    except (UserNotFoundError, UserDisabledQueryError) as e:
         msg = str(e)
     except Exception as e:
         log.error(traceback.format_exc())

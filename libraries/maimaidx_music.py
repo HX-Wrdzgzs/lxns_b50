@@ -34,6 +34,20 @@ class MaiMusic:
         self.total_alias_list: Dict[str, List[str]] = {}
         self.guess_data: List[Music] = []
 
+    # ==========================================
+    # 动态生成按定数等级分类的歌曲字典，兼容定数表调用
+    # ==========================================
+    @property
+    def total_level_data(self) -> Dict[str, MusicList]:
+        res = {}
+        for music in self.total_list:
+            for lv in music.get('level', []):
+                if lv not in res:
+                    res[lv] = MusicList()
+                if music not in res[lv]:
+                    res[lv].append(music)
+        return res
+
     async def get_music(self) -> None:
         log.info("开始拉取双数据源进行强同步合流...")
         lxns_music: List[Dict] = []
@@ -48,7 +62,6 @@ class MaiMusic:
                     res = await client.get("https://maimai.lxns.net/api/v0/maimai/song/list", headers=headers)
                     if res.status_code == 200:
                         res_json = res.json()
-                        # 严谨剥离 API 响应外壳
                         if isinstance(res_json, dict) and "data" in res_json:
                             lxns_music = res_json["data"]
                         elif isinstance(res_json, list):

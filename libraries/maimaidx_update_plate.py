@@ -11,7 +11,7 @@ from .maimaidx_music import Music, mai
 async def update_rating_table() -> str:
     """更新定数表"""
     try:
-        dx = Image.open(maimaidir / 'DX.png').convert('RGBA').resize((44, 16))
+        dx = Image.open(maidir / 'DX.png').convert('RGBA').resize((44, 16))
         diff = [Image.new('RGBA', (75, 16), color) for color in ScoreBaseImage.bg_color]
         sbi = ScoreBaseImage()
         atime = 0
@@ -61,7 +61,7 @@ async def update_rating_table() -> str:
             dr = ImageDraw.Draw(im)
             sy = DrawText(dr, SIYUAN)
             ts = DrawText(dr, TBFONT)
-            im.alpha_composite(Image.open(maimaidir / 'design.png'), (200, height - 113))
+            im.alpha_composite(Image.open(maidir / 'design.png'), (200, height - 113))
             sy.draw(
                 700, 
                 height - 70, 
@@ -75,7 +75,7 @@ async def update_rating_table() -> str:
                 x = 160
                 y += 20
                 im.alpha_composite(
-                    Image.open(maimaidir / 'UI_CMN_Chara_Level_S_01.png').resize((80, 80)), (50, y + 80)
+                    Image.open(maidir / 'UI_CMN_Chara_Level_S_01.png').resize((80, 80)), (50, y + 80)
                 )
                 ts.draw(88, y + 120, 35, _lv, anchor='mm')
                 for num, music in enumerate(lvlist[_lv]):
@@ -168,7 +168,7 @@ async def update_plate_table() -> str:
             dr = ImageDraw.Draw(im)
             ts = DrawText(dr, TBFONT)
             sy = DrawText(dr, SIYUAN)
-            im.alpha_composite(Image.open(maimaidir / 'design.png'), (200, height - 113))
+            im.alpha_composite(Image.open(maidir / 'design.png'), (200, height - 113))
             sy.draw(
                 700, 
                 height - 70, 
@@ -186,7 +186,7 @@ async def update_plate_table() -> str:
                 if ralv[r]:
                     y += 15
                     im.alpha_composite(
-                        Image.open(maimaidir / 'UI_CMN_Chara_Level_S_01.png'), (65, y + 115)
+                        Image.open(maidir / 'UI_CMN_Chara_Level_S_01.png'), (65, y + 115)
                     )
                     ts.draw(113, y + 164, 35, r, anchor='mm')
                 x = 200
