@@ -22,7 +22,7 @@ from nonebot_plugin_apscheduler import scheduler
 __plugin_meta__ = PluginMetadata(
     name='舞萌DX查分服务',
     description='基于 NoneBot2 完美适配水鱼与落雪双数据源的街机高并发中继查分系统',
-        usage=(
+    usage=(
         "【🎵 MaimaiDX 查分专属指令栏】\n"
         "· b50 : 生成 Best 50 个人成绩精美大图\n"
         "· ap50 : 生成纯 AP 状态的收曲成就大图\n"
@@ -32,24 +32,27 @@ __plugin_meta__ = PluginMetadata(
         "· 切换数据源 <水鱼/落雪> : 切换默认输出端\n"
         "· mai曲线 : 【落雪特供】绘制 Rating 历史趋势走势折线图"
     ),
-
     type='application',
     config=Config,
     supported_adapters={'~onebot.v11'},
     extra={
         "menu_data": [
             {
-                "category": " Arcade街机音游 ",
-                "cmds": [
-                    {"cmd": "b50", "desc": "生成 Best 50 个人成绩精美大图"},
-                    {"cmd": "ap50", "desc": "生成纯 AP 状态的收曲成就大图"},
-                    {"cmd": "mai状态", "desc": "诊断双端绑定，管理默认数据源"},
-                    {"cmd": "切换数据源", "desc": "切换默认输出端为水鱼或落雪"},
-                    {"cmd": "minfo", "desc": "查询单谱面详细游玩成绩与分数线"},
-                    {"cmd": "mai曲线", "desc": "绘制个人 Rating 历史趋势走势折线图"}
-                ]
+                "func": "Maimai查分",
+                "trigger_method": "指令",
+                "trigger_condition": "b50 / ap50 / minfo",
+                "brief_des": "Maimai DX 成绩查询与出图",
+                "detail_des": "支持落雪和水鱼双端数据源的B50生成及单曲数据查询"
+            },
+            {
+                "func": "账户与路由设置",
+                "trigger_method": "指令",
+                "trigger_condition": "mai状态 / 切换数据源",
+                "brief_des": "管理双端绑定与查分源",
+                "detail_des": "诊断落雪与水鱼绑定状态，支持动态切置全局缺省查分路由"
             }
-        ]
+        ],
+        "menu_template": "default"
     }
 )
 
